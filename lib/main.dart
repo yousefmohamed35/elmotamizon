@@ -10,7 +10,8 @@ import 'package:screen_protector/screen_protector.dart';
 
 import 'common/resources/language_manager.dart';
 
-final _configurations = PurchasesConfiguration('appl_dIZNAvVmlkwrNNJGKvyPeSritBB');
+final _configurations =
+    PurchasesConfiguration('appl_dIZNAvVmlkwrNNJGKvyPeSritBB');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,12 +30,12 @@ Future<void> main() async {
         )
       : await Firebase.initializeApp(
           options: const FirebaseOptions(
-              apiKey: "AIzaSyB6NKqSgugihhrEos2vjyWptnLtT4Bdr2w",
-              appId: "1:171033213171:ios:8dcb39ab6d0d2b8cb65f86",
-              messagingSenderId: "171033213171",
-              projectId: "al-motamizon",
-              storageBucket: "al-motamizon.firebasestorage.app",
-              iosBundleId: "tech.brmja.elmotamizon",
+            apiKey: "AIzaSyB6NKqSgugihhrEos2vjyWptnLtT4Bdr2w",
+            appId: "1:171033213171:ios:8dcb39ab6d0d2b8cb65f86",
+            messagingSenderId: "171033213171",
+            projectId: "al-motamizon",
+            storageBucket: "al-motamizon.firebasestorage.app",
+            iosBundleId: "tech.brmja.elmotamizon",
           ),
         );
 

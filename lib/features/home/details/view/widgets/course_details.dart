@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:elmotamizon/app/imports.dart';
 import 'package:elmotamizon/common/base/base_state.dart';
@@ -23,11 +21,14 @@ class CourseDetails extends StatelessWidget {
   const CourseDetails({
     super.key,
     required this.text,
-    required this.id, this.course,
+    required this.id,
+    this.course,
+    this.onOpenPdf,
   });
   final String text;
   final int id;
   final CourseModel? course;
+  final void Function(String, String)? onOpenPdf;
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +80,7 @@ class CourseDetails extends StatelessWidget {
                       url: booksList[index].file ?? '',
                       fileName: booksList[index].name ?? '',
                       isOpen: booksList[index].isFree==1 || booksList[index].isSubscribed==1,
+                      onOpenPdf: onOpenPdf,
                     );
                   },
                 ).toList(),

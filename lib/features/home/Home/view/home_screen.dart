@@ -54,17 +54,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-  create: (context) => instance<SearchCubit>(),
-  child: Builder(
-    builder: (context) {
-      _searchCubit = context.read<SearchCubit>();
-      return Scaffold(
+      create: (context) => instance<SearchCubit>(),
+      child: Builder(builder: (context) {
+        _searchCubit = context.read<SearchCubit>();
+        return Scaffold(
           body: SingleChildScrollView(
             padding: EdgeInsets.only(top: 60.h, bottom: 20.h),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 /// header
                 const HomeHeader(),
                 Gap(15.h),
@@ -99,17 +97,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         Gap(25.h),
                       ],
                     ),
-                    if(_searchController.text.isNotEmpty)
-                      SearchWidgets(searchCubit: _searchCubit,),
+                    if (_searchController.text.isNotEmpty)
+                      SearchWidgets(
+                        searchCubit: _searchCubit,
+                      ),
                   ],
                 )
               ],
             ),
           ),
         );
-    }
-  ),
-);
+      }),
+    );
   }
 
   _searchBar() {
@@ -119,12 +118,18 @@ class _HomeScreenState extends State<HomeScreen> {
         controller: _searchController,
         hintText: AppStrings.search.tr(),
         prefixIconPath: Assets.assetsIconsNewSearch,
-        suffixIcon: _searchController.text.isEmpty ? null : IconButton(
-            onPressed: () {
-              _searchController.clear();
-              setState(() {});
-            },
-            icon: Icon(Icons.close,color: ColorManager.red,size: 20.r,)),
+        suffixIcon: _searchController.text.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {});
+                },
+                icon: Icon(
+                  Icons.close,
+                  color: ColorManager.red,
+                  size: 20.r,
+                )),
         borderRadius: 10.r,
         disableHelperText: true,
         fillColor: ColorManager.white,
@@ -135,8 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _debounce = Timer(const Duration(milliseconds: 800), () {
             if (value.isNotEmpty) {
               _searchCubit.loadFirstSearchPage(text: value);
-
-            }else{
+            } else {
               _searchCubit.state.items.clear();
             }
             setState(() {});
@@ -171,7 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const CustomListRowShimmer();
               }
               if (state.status == Status.failure) {
-                return DefaultErrorWidget(errorMessage: state.errorMessage ?? '');
+                return DefaultErrorWidget(
+                    errorMessage: state.errorMessage ?? '');
               }
               if (state.items.isEmpty) {
                 return DefaultErrorWidget(errorMessage: AppStrings.noData.tr());
@@ -209,7 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () {
               AppFunctions.navigateTo(
                 context,
-
                 const BottomNavBarView(
                   pageIndex: 3,
                 ),
@@ -291,9 +295,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       AppFunctions.navigateTo(
                         context,
                         Details(
-                            id: "${state.items[index].courseId}",
+                          id: "${state.items[index].courseId}",
                           videoId: state.items[index].id,
                           videoUrl: state.items[index].videoUrl,
+                          videoTitle: state.items[index].name,
                         ),
                       );
                     },

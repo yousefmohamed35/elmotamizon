@@ -13,14 +13,19 @@ class DownloadFileWidget extends StatefulWidget {
   final String fileName;
   final String url;
   final bool isOpen;
-  const DownloadFileWidget({super.key, this.fileName = '', required this.url, this.isOpen = true});
+  final void Function(String pdfLink, String name)? onOpenPdf;
+  const DownloadFileWidget(
+      {super.key,
+      this.fileName = '',
+      required this.url,
+      this.isOpen = true,
+      this.onOpenPdf});
 
   @override
   State<DownloadFileWidget> createState() => _DownloadFileWidgetState();
 }
 
 class _DownloadFileWidgetState extends State<DownloadFileWidget> {
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -28,30 +33,55 @@ class _DownloadFileWidgetState extends State<DownloadFileWidget> {
       color: ColorManager.white,
       child: Row(
         children: [
-          SvgPicture.asset(IconAssets.file,height: 20.w,width: 20.w,),
-          SizedBox(width: 10.w,),
-          Expanded(child: Text(widget.fileName,style: getSemiBoldStyle(fontSize: 15.sp, color: ColorManager.textColor),overflow: TextOverflow.ellipsis,maxLines: 1,)),
-          SizedBox(width: 10.w,),
+          SvgPicture.asset(
+            IconAssets.file,
+            height: 20.w,
+            width: 20.w,
+          ),
+          SizedBox(
+            width: 10.w,
+          ),
+          Expanded(
+              child: Text(
+            widget.fileName,
+            style: getSemiBoldStyle(
+                fontSize: 15.sp, color: ColorManager.textColor),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          )),
+          SizedBox(
+            width: 10.w,
+          ),
           TextButton(
               style: TextButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 5.h,horizontal: 5.h),
+                  padding: EdgeInsets.symmetric(vertical: 5.h, horizontal: 5.h),
                   minimumSize: const Size(0, 0),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5.r))
-              ),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(5.r))),
               onPressed: () async {
-                if(!widget.isOpen) {
-                  AppFunctions.showsToast(
-                      AppStrings.subscribeFirst.tr(), ColorManager.red, context);
+                if (!widget.isOpen) {
+                  AppFunctions.showsToast(AppStrings.subscribeFirst.tr(),
+                      ColorManager.red, context);
                   return;
                 }
-                AppFunctions.navigateTo(
-                  context,
-                  PdfView(
-                      pdfLink: widget.url,
-                      name: widget.fileName),
-                );
-              }, child: Text(AppStrings.download.tr(),style: getBoldStyle(fontSize: 15.sp, color: widget.isOpen ? ColorManager.primary : ColorManager.grey, height: 1.5.h),
-          )),
+                if (widget.onOpenPdf != null) {
+                  widget.onOpenPdf!(widget.url, widget.fileName);
+                } else {
+                  AppFunctions.navigateTo(
+                    context,
+                    PdfView(pdfLink: widget.url, name: widget.fileName),
+                  );
+                }
+              },
+              child: Text(
+                AppStrings.download.tr(),
+                style: getBoldStyle(
+                    fontSize: 15.sp,
+                    color: widget.isOpen
+                        ? ColorManager.primary
+                        : ColorManager.grey,
+                    height: 1.5.h),
+              )),
         ],
       ),
     );
