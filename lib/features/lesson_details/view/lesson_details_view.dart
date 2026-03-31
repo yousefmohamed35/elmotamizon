@@ -5,6 +5,7 @@ import 'package:elmotamizon/common/resources/color_manager.dart';
 import 'package:elmotamizon/common/resources/strings_manager.dart';
 import 'package:elmotamizon/common/resources/styles_manager.dart';
 import 'package:elmotamizon/common/widgets/default_error_widget.dart';
+import 'package:elmotamizon/common/widgets/video_playback_speed/youtube_playback_speed_dropdown.dart';
 import 'package:elmotamizon/common/widgets/default_expansion_tile.dart';
 import 'package:elmotamizon/common/widgets/download_file_widget.dart';
 import 'package:elmotamizon/features/details/models/course_or_lesson_or_exam_or_homework_model.dart';
@@ -205,6 +206,21 @@ class _LessonDetailsViewState extends State<LessonDetailsView> {
                 player: YoutubePlayer(
                   controller: _lessonDetailsCubit.controller!,
                   aspectRatio: calculateAspectRatio(),
+                  controlsTimeOut: const Duration(seconds: 30),
+                  bottomActions: [
+                    const SizedBox(width: 14),
+                    const CurrentPosition(),
+                    const SizedBox(width: 8),
+                    ProgressBar(
+                      isExpanded: true,
+                      colors: const ProgressBarColors(
+                        playedColor: Colors.red,
+                        handleColor: Colors.redAccent,
+                      ),
+                    ),
+                    const RemainingDuration(),
+                    const FullScreenButton(),
+                  ],
                 ),
                 onEnterFullScreen: () {
                   setState(() {
@@ -229,13 +245,27 @@ class _LessonDetailsViewState extends State<LessonDetailsView> {
                   ]);
                 },
                 builder: (context, player) {
+                  final h = _isFullScreen
+                      ? MediaQuery.of(context).size.height
+                      : MediaQuery.of(context).size.height * .3;
                   return Column(
                     children: [
                       SizedBox(
-                        height: _isFullScreen
-                            ? MediaQuery.of(context).size.height
-                            : MediaQuery.of(context).size.height * .3,
-                        child: player,
+                        height: h,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            player,
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: YoutubePlaybackSpeedDropdown(
+                                controller: _lessonDetailsCubit.controller!,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   );

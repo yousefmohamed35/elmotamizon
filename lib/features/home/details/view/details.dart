@@ -12,6 +12,7 @@ import 'package:elmotamizon/common/resources/color_manager.dart';
 import 'package:elmotamizon/common/resources/strings_manager.dart';
 import 'package:elmotamizon/common/widgets/default_button_widget.dart';
 import 'package:elmotamizon/common/widgets/default_error_widget.dart';
+import 'package:elmotamizon/common/widgets/video_playback_speed/playback_speed.dart';
 import 'package:elmotamizon/common/widgets/default_image_widget.dart';
 import 'package:elmotamizon/features/details/cubit/subscribe_teacher_cubit.dart';
 import 'package:elmotamizon/features/home/details/cubit/course_details/course_details_cubit.dart';
@@ -794,7 +795,13 @@ class _DetailsState extends State<Details> {
                         ),
                       ),
                     ),
-                    // Controls overlay
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: VideoPlaybackSpeedControls(
+                        controller: _videoController!,
+                      ),
+                    ),
                     Positioned.fill(
                       child: _buildVideoControls(),
                     ),

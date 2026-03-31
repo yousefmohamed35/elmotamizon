@@ -5,7 +5,6 @@ import 'package:elmotamizon/features/lesson_details/models/lesson_details_model.
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
-
 class LessonDetailsCubit extends Cubit<BaseState<LessonDetailsModel>> {
   LessonDetailsCubit(this._courseDetailsDataSource) : super(const BaseState());
   final LessonDetailsDataSource _courseDetailsDataSource;
@@ -14,8 +13,11 @@ class LessonDetailsCubit extends Cubit<BaseState<LessonDetailsModel>> {
     emit(state.copyWith(status: Status.loading));
     final result = await _courseDetailsDataSource.getLessonDetails(id);
     result.fold(
-          (failure) => emit(state.copyWith(status: Status.failure, failure: failure, errorMessage: failure.message)),
-          (success) => emit(state.copyWith(status: Status.success, data: success)),
+      (failure) => emit(state.copyWith(
+          status: Status.failure,
+          failure: failure,
+          errorMessage: failure.message)),
+      (success) => emit(state.copyWith(status: Status.success, data: success)),
     );
   }
 
@@ -24,14 +26,11 @@ class LessonDetailsCubit extends Cubit<BaseState<LessonDetailsModel>> {
   void initYoutubePlayer({required String videoUrl}) {
     emit(state.copyWith(status: Status.loading));
     controller = YoutubePlayerController(
-
-      initialVideoId: AppFunctions.getYoutubeVideoId(videoUrl) ,
-
-
+      initialVideoId: AppFunctions.getYoutubeVideoId(videoUrl),
       flags: const YoutubePlayerFlags(
-          autoPlay: false,
-          hideThumbnail: true,
-
+        autoPlay: false,
+        hideThumbnail: true,
+        controlsVisibleAtStart: true,
       ),
     );
     emit(state.copyWith(status: Status.custom));

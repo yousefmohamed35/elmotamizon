@@ -1,33 +1,35 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'package:elmotamizon/common/widgets/video_playback_speed/playback_speed.dart';
-import 'package:elmotamizon/features/offline_video/domain/entities/encrypted_video_metadata.dart';
-import 'package:elmotamizon/features/offline_video/presentation/cubit/offline_video_cubit.dart';
 
-/// Plays an offline (decrypted) video from a temp file and deletes the file on dispose.
-/// Call [prepareAndPlay] with the metadata; the cubit will resolve the temp path.
-class OfflineVideoPlayerWidget extends StatefulWidget {
-  const OfflineVideoPlayerWidget({
+/// Network streaming video with the same controls as [OfflineVideoPlayerWidget]
+/// (play/pause, seek ±10s, scrubber, fullscreen, playback speed sheet + overlay).
+class NetworkVideoPlayerWidget extends StatefulWidget {
+  const NetworkVideoPlayerWidget({
     super.key,
-    required this.metadata,
-    required this.cubit,
+    required this.videoUrl,
+    this.httpHeaders,
+    this.onFullScreenChanged,
   });
 
-  final EncryptedVideoMetadata metadata;
-  final OfflineVideoCubit cubit;
+  /// Direct URL to the video file (e.g. MP4 from your API).
+  final String videoUrl;
+
+  /// Optional headers (auth, etc.) for [VideoPlayerController.networkUrl].
+  final Map<String, String>? httpHeaders;
+
+  /// Notifies parent when user toggles fullscreen (e.g. to expand the player slot).
+  final ValueChanged<bool>? onFullScreenChanged;
 
   @override
-  State<OfflineVideoPlayerWidget> createState() =>
-      _OfflineVideoPlayerWidgetState();
+  State<NetworkVideoPlayerWidget> createState() =>
+      _NetworkVideoPlayerWidgetState();
 }
 
-class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
+class _NetworkVideoPlayerWidgetState extends State<NetworkVideoPlayerWidget> {
   VideoPlayerController? _controller;
-  String? _tempFilePath;
   bool _preparing = true;
   String? _error;
   bool _controlsVisible = true;
@@ -36,15 +38,49 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
   @override
   void initState() {
     super.initState();
-    _prepareAndPlay();
+    _prepare();
   }
 
-  Future<void> _prepareAndPlay() async {
+  @override
+  void didUpdateWidget(NetworkVideoPlayerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl) {
+      _disposeController();
+      _prepare();
+    }
+  }
+
+  void _disposeController() {
+    _controller?.dispose();
+    _controller = null;
+  }
+
+  Future<void> _prepare() async {
+    final url = widget.videoUrl.trim();
+    if (url.isEmpty) {
+      setState(() {
+        _preparing = false;
+        _error = null;
+        _controller = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _preparing = true;
+      _error = null;
+    });
+
     try {
-      final path = await widget.cubit.preparePlaybackPath(widget.metadata);
-      if (!mounted) return;
-      _tempFilePath = path;
-      _controller = VideoPlayerController.file(File(path));
+      final uri = Uri.parse(url);
+      if (!uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+        throw FormatException('Invalid video URL: $url');
+      }
+
+      _controller = VideoPlayerController.networkUrl(
+        uri,
+        httpHeaders: widget.httpHeaders!,
+      );
       await _controller!.initialize();
       if (!mounted) return;
       setState(() {
@@ -57,6 +93,7 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
         setState(() {
           _preparing = false;
           _error = e.toString();
+          _disposeController();
         });
       }
     }
@@ -65,20 +102,20 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
   @override
   void dispose() {
     _exitFullScreenIfNeeded();
-    _controller?.dispose();
-    _controller = null;
-    if (_tempFilePath != null) {
-      try {
-        final file = File(_tempFilePath!);
-        if (file.existsSync()) file.deleteSync();
-      } catch (_) {}
-      _tempFilePath = null;
-    }
+    _disposeController();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final url = widget.videoUrl.trim();
+    if (url.isEmpty) {
+      return const Center(
+        child:
+            Icon(Icons.ondemand_video_outlined, size: 48, color: Colors.grey),
+      );
+    }
+
     if (_error != null) {
       return Center(
         child: Padding(
@@ -189,9 +226,7 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
                         IconButton(
                           icon:
                               const Icon(Icons.replay_10, color: Colors.white),
-                          onPressed: () {
-                            seekRelative(10);
-                          },
+                          onPressed: () => seekRelative(-10),
                         ),
                         IconButton(
                           iconSize: 56,
@@ -212,9 +247,7 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
                         IconButton(
                           icon:
                               const Icon(Icons.forward_10, color: Colors.white),
-                          onPressed: () {
-                            seekRelative(-10);
-                          },
+                          onPressed: () => seekRelative(10),
                         ),
                       ],
                     ),
@@ -293,6 +326,7 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
     setState(() {
       _isFullScreen = !_isFullScreen;
     });
+    widget.onFullScreenChanged?.call(_isFullScreen);
   }
 
   Future<void> _exitFullScreenIfNeeded() async {
@@ -307,5 +341,6 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
         overlays: SystemUiOverlay.values,
       ),
     ]);
+    widget.onFullScreenChanged?.call(false);
   }
 }
