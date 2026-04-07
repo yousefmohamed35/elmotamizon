@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:easy_localization/easy_localization.dart';
@@ -12,7 +11,6 @@ import 'package:elmotamizon/common/resources/color_manager.dart';
 import 'package:elmotamizon/common/resources/strings_manager.dart';
 import 'package:elmotamizon/common/widgets/default_button_widget.dart';
 import 'package:elmotamizon/common/widgets/default_error_widget.dart';
-import 'package:elmotamizon/common/widgets/video_playback_speed/playback_speed.dart';
 import 'package:elmotamizon/common/widgets/default_image_widget.dart';
 import 'package:elmotamizon/features/details/cubit/subscribe_teacher_cubit.dart';
 import 'package:elmotamizon/features/home/details/cubit/course_details/course_details_cubit.dart';
@@ -27,8 +25,6 @@ import 'package:elmotamizon/features/home/details/view/widgets/teacher_data.dart
 import 'package:elmotamizon/features/home/details/view/widgets/voice_note.dart';
 import 'package:elmotamizon/features/payment/digital_payment_order_place_screen.dart';
 import 'package:elmotamizon/features/offline_video/domain/entities/downloadable_video.dart';
-import 'package:elmotamizon/features/offline_video/domain/entities/encrypted_video_metadata.dart';
-import 'package:elmotamizon/features/offline_video/domain/usecases/get_offline_videos_use_case.dart';
 import 'package:elmotamizon/features/offline_video/presentation/cubit/offline_video_cubit.dart';
 import 'package:elmotamizon/features/offline_video/presentation/cubit/offline_video_state.dart';
 import 'package:flutter/foundation.dart';
@@ -44,20 +40,10 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:video_player/video_player.dart';
 
 class Details extends StatefulWidget {
-  const Details({
-    super.key,
-    required this.id,
-    this.videoId,
-    this.videoUrl,
-    this.videoTitle,
-  });
+  const Details({super.key, required this.id, this.videoId, this.videoUrl});
   final String id;
   final int? videoId;
   final String? videoUrl;
-
-  /// Display name for [videoId] when opening from a list (e.g. lesson title for free content).
-  final String? videoTitle;
-
   @override
   State<Details> createState() => _DetailsState();
 }
@@ -84,44 +70,6 @@ class _DetailsState extends State<Details> {
   String? _openedPdfLink;
   String? _openedPdfName;
   final OfflineVideoCubit _offlineVideoCubit = instance<OfflineVideoCubit>();
-  Set<String> _offlineVideoIds = {};
-  String? _offlineTempPath;
-
-  Future<void> _refreshOfflineVideoIds() async {
-    try {
-      final list = await instance<GetOfflineVideosUseCase>()();
-      if (!mounted) return;
-      setState(() {
-        _offlineVideoIds = list.map((e) => e.videoId).toSet();
-      });
-    } catch (_) {}
-  }
-
-  void _cleanupOfflineTempFile() {
-    if (_offlineTempPath != null) {
-      try {
-        final f = File(_offlineTempPath!);
-        if (f.existsSync()) f.deleteSync();
-      } catch (_) {}
-      _offlineTempPath = null;
-    }
-  }
-
-  /// Title for offline save / UI: lesson name when applicable, not the course name.
-  String _effectiveVideoTitle({
-    String? lessonTitle,
-    CourseModel? course,
-    String? storedTitle,
-  }) {
-    if (lessonTitle != null && lessonTitle.isNotEmpty) return lessonTitle;
-    if (widget.videoTitle != null && widget.videoTitle!.isNotEmpty) {
-      return widget.videoTitle!;
-    }
-    if (widget.videoId == null) {
-      return course?.name ?? '';
-    }
-    return storedTitle ?? '';
-  }
 
   void _openPdfInScreen(String pdfLink, String name) {
     final isPlaying = _videoController?.value.isPlaying ?? false;
@@ -183,7 +131,6 @@ class _DetailsState extends State<Details> {
   void dispose() {
     ttsTimer?.cancel();
     _stopTTS();
-    _cleanupOfflineTempFile();
     _offlineVideoCubit.close();
     _videoController?.dispose();
     super.dispose();
@@ -195,57 +142,18 @@ class _DetailsState extends State<Details> {
     super.deactivate();
   }
 
-  Future<void> _initializeVideoPlayer(
-    CourseModel? course, {
-    int? lessonId,
-    String? lessonTitle,
-  }) async {
+  Future<void> _initializeVideoPlayer(CourseModel? course) async {
     final url = widget.videoUrl ?? course?.videoUrl;
-    final idForStorage = lessonId ?? widget.videoId ?? course?.id;
-    final idStr = idForStorage?.toString() ?? '';
-
-    if (idStr.isNotEmpty) {
-      final downloaded = await _offlineVideoCubit.isVideoDownloaded(idStr);
-      if (downloaded) {
-        final list = await instance<GetOfflineVideosUseCase>()();
-        EncryptedVideoMetadata? meta;
-        for (final m in list) {
-          if (m.videoId == idStr) {
-            meta = m;
-            break;
-          }
-        }
-        if (meta != null) {
-          final display = _effectiveVideoTitle(
-            lessonTitle: lessonTitle,
-            course: course,
-            storedTitle: meta.title,
-          );
-          await _initializeOfflinePlayer(
-            meta,
-            displayTitle: display.isNotEmpty ? display : meta.title,
-            networkUrlFallback: url,
-          );
-          return;
-        }
-      }
-    }
-
     if (url == null || url.isEmpty) return;
 
+    // New video selected → reset download flag
     if (url != _currentVideoUrl) {
       _hasRequestedDownload = false;
     }
 
-    _cleanupOfflineTempFile();
     _currentVideoUrl = url;
-    _currentVideoTitle = _effectiveVideoTitle(
-      lessonTitle: lessonTitle,
-      course: course,
-    );
-    _currentVideoId = idStr.isNotEmpty
-        ? idStr
-        : (widget.videoId ?? course?.id ?? '').toString();
+    _currentVideoTitle = course?.name ?? '';
+    _currentVideoId = (widget.videoId ?? course?.id ?? '').toString();
 
     _videoController?.dispose();
     _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
@@ -267,506 +175,406 @@ class _DetailsState extends State<Details> {
     }
   }
 
-  Future<void> _initializeOfflinePlayer(
-    EncryptedVideoMetadata meta, {
-    required String displayTitle,
-    String? networkUrlFallback,
-  }) async {
-    _cleanupOfflineTempFile();
-    _videoController?.dispose();
-    _stopTTS();
-    _wasPlaying = false;
-
-    if (networkUrlFallback != _currentVideoUrl) {
-      _hasRequestedDownload = false;
-    }
-
-    try {
-      final path = await _offlineVideoCubit.preparePlaybackPath(meta);
-      _offlineTempPath = path;
-      _currentVideoUrl = networkUrlFallback ?? '';
-      _currentVideoTitle = displayTitle;
-      _currentVideoId = meta.videoId;
-      _showVideoPlayer = true;
-
-      _videoController = VideoPlayerController.file(File(path));
-      await _videoController!.initialize();
-      _videoController!.addListener(() {
-        final isPlaying = _videoController?.value.isPlaying ?? false;
-        if (isPlaying && !_wasPlaying) {
-          _counter();
-          _wasPlaying = true;
-        }
-        if (!isPlaying) {
-          ttsTimer?.cancel();
-          _wasPlaying = false;
-        }
-      });
-      await _videoController!.play();
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-      if (mounted) {
-        AppFunctions.showsToast(
-          e.toString(),
-          ColorManager.red,
-          context,
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) =>
           instance<CourseDetailsCubit>()..getCourseDetails(widget.id),
-      child: BlocListener<OfflineVideoCubit, OfflineVideoState>(
-        bloc: _offlineVideoCubit,
-        listenWhen: (previous, current) =>
-            current is OfflineVideoDownloadCompleted,
+      child: BlocConsumer<CourseDetailsCubit, BaseState<CourseDetailsModel>>(
         listener: (context, state) {
-          _refreshOfflineVideoIds();
+          if (state.isSuccess) {
+            _initializeVideoPlayer(state.data?.data);
+          }
         },
-        child: BlocConsumer<CourseDetailsCubit, BaseState<CourseDetailsModel>>(
-          listener: (context, state) {
-            if (state.isSuccess) {
-              _initializeVideoPlayer(state.data?.data);
-            }
-          },
-          builder: (context, state) {
-            final courseDetails = state.data?.data;
-            return SafeArea(
-              child: Scaffold(
-                bottomNavigationBar: _subscribeButton(),
-                body: Stack(
-                  children: [
-                    state.status == Status.loading
-                        ? const Center(
-                            child: CircularProgressIndicator(),
-                          )
-                        : state.status == Status.failure
-                            ? DefaultErrorWidget(
-                                errorMessage: state.errorMessage ?? '')
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _youtubePlayer(courseDetails),
-                                  Expanded(
-                                    child: _openedPdfLink != null
-                                        ? Column(
+        builder: (context, state) {
+          final courseDetails = state.data?.data;
+          return SafeArea(
+            child: Scaffold(
+              bottomNavigationBar: _subscribeButton(),
+              body: Stack(
+                children: [
+                  state.status == Status.loading
+                      ? const Center(
+                          child: CircularProgressIndicator(),
+                        )
+                      : state.status == Status.failure
+                          ? DefaultErrorWidget(
+                              errorMessage: state.errorMessage ?? '')
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _youtubePlayer(courseDetails),
+                            Expanded(
+                              child: _openedPdfLink != null
+                                  ? Column(
+                                      children: [
+                                        Padding(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 12.w, vertical: 8.h),
+                                          child: Row(
                                             children: [
-                                              Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: 12.w,
-                                                    vertical: 8.h),
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      width: 40.w,
-                                                      height: 4.h,
-                                                      decoration: BoxDecoration(
-                                                        color: ColorManager
-                                                            .grayColor2,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8.r),
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 12.w),
-                                                    Expanded(
-                                                      child: Text(
-                                                        _openedPdfName ?? '',
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                    ),
-                                                    IconButton(
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          _openedPdfLink = null;
-                                                          _openedPdfName = null;
-                                                        });
-                                                      },
-                                                      icon: const Icon(
-                                                          Icons.close),
-                                                    ),
-                                                  ],
+                                              Container(
+                                                width: 40.w,
+                                                height: 4.h,
+                                                decoration: BoxDecoration(
+                                                  color: ColorManager.grayColor2,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8.r),
                                                 ),
                                               ),
+                                              SizedBox(width: 12.w),
                                               Expanded(
-                                                child: SfPdfViewerTheme(
-                                                  data: SfPdfViewerThemeData(
-                                                    backgroundColor:
-                                                        Colors.white,
-                                                  ),
-                                                  child: SfPdfViewer.network(
-                                                    _openedPdfLink!,
-                                                    canShowPaginationDialog:
-                                                        false,
-                                                  ),
+                                                child: Text(
+                                                  _openedPdfName ?? '',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
+                                              ),
+                                              IconButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _openedPdfLink = null;
+                                                    _openedPdfName = null;
+                                                  });
+                                                },
+                                                icon: const Icon(Icons.close),
                                               ),
                                             ],
-                                          )
-                                        : SingleChildScrollView(
-                                            physics:
-                                                const ClampingScrollPhysics(),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              spacing: 10.h,
-                                              children: [
-                                                if (_currentVideoUrl != null)
-                                                  Padding(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                            horizontal: 15.w,
-                                                            vertical: 8.h),
-                                                    child: BlocBuilder<
-                                                        OfflineVideoCubit,
-                                                        OfflineVideoState>(
-                                                      bloc: _offlineVideoCubit,
-                                                      builder: (context,
-                                                          offlineState) {
-                                                        final isDownloading = offlineState
-                                                                is OfflineVideoDownloading &&
-                                                            offlineState
-                                                                    .videoId ==
-                                                                _currentVideoId;
-                                                        final isCompleted = offlineState
-                                                                is OfflineVideoDownloadCompleted &&
-                                                            offlineState
-                                                                    .videoId ==
-                                                                _currentVideoId;
-                                                        final progress =
-                                                            isDownloading
-                                                                ? offlineState
-                                                                    .progress
-                                                                : null;
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: SfPdfViewerTheme(
+                                            data: SfPdfViewerThemeData(
+                                              backgroundColor: Colors.white,
+                                            ),
+                                            child: SfPdfViewer.network(
+                                              _openedPdfLink!,
+                                              canShowPaginationDialog: false,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : SingleChildScrollView(
+                                      physics: const ClampingScrollPhysics(),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        spacing: 10.h,
+                                        children: [
+                                          if (_currentVideoUrl != null)
+                                            Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 15.w,
+                                                  vertical: 8.h),
+                                              child: BlocBuilder<
+                                                  OfflineVideoCubit,
+                                                  OfflineVideoState>(
+                                                bloc: _offlineVideoCubit,
+                                                builder: (context, offlineState) {
+                                                  final isDownloading = offlineState
+                                                          is OfflineVideoDownloading &&
+                                                      offlineState.videoId ==
+                                                          _currentVideoId;
+                                                  final isCompleted = offlineState
+                                                          is OfflineVideoDownloadCompleted &&
+                                                      offlineState.videoId ==
+                                                          _currentVideoId;
+                                                  final progress = isDownloading
+                                                      ? offlineState.progress
+                                                      : null;
 
-                                                        final String buttonText;
-                                                        if (isDownloading &&
-                                                            progress != null) {
-                                                          buttonText =
-                                                              'Downloading ${progress.percentage}%';
-                                                        } else if (isCompleted) {
-                                                          buttonText =
-                                                              'Downloaded';
-                                                        } else {
-                                                          buttonText =
-                                                              'Download for offline';
-                                                        }
+                                                  final String buttonText;
+                                                  if (isDownloading &&
+                                                      progress != null) {
+                                                    buttonText =
+                                                        'Downloading ${progress.percentage}%';
+                                                  } else if (isCompleted) {
+                                                    buttonText = 'Downloaded';
+                                                  } else {
+                                                    buttonText =
+                                                        'Download for offline';
+                                                  }
 
-                                                        return Column(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .stretch,
-                                                          children: [
-                                                            DefaultButtonWidget(
-                                                              text: buttonText,
-                                                              color:
-                                                                  ColorManager
-                                                                      .primary,
-                                                              textColor:
-                                                                  ColorManager
-                                                                      .white,
-                                                              onPressed: (isDownloading ||
-                                                                      isCompleted)
-                                                                  ? null
-                                                                  : _downloadCurrentVideo,
-                                                            ),
-                                                            if (isDownloading &&
-                                                                progress !=
-                                                                    null)
-                                                              Padding(
-                                                                padding:
-                                                                    EdgeInsets
-                                                                        .only(
-                                                                  top: 8.h,
-                                                                ),
-                                                                child:
-                                                                    LinearProgressIndicator(
-                                                                  value: progress
-                                                                      .progress,
-                                                                  backgroundColor:
-                                                                      Colors
-                                                                          .grey
-                                                                          .shade300,
-                                                                  color: ColorManager
-                                                                      .primary,
-                                                                ),
-                                                              ),
-                                                          ],
-                                                        );
-                                                      },
-                                                    ),
-                                                  ),
-                                                if (!_isFullScreen)
-                                                  Padding(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                            horizontal: 15.w),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      spacing: 3.h,
-                                                      children: [
-                                                        Gap(10.h),
-                                                        Row(
-                                                          children: [
-                                                            Expanded(
-                                                              child: Text(
-                                                                courseDetails
-                                                                        ?.teacher ??
-                                                                    '',
-                                                                style: context
-                                                                    .textTheme
-                                                                    .bodyMedium!
-                                                                    .copyWith(
-                                                                  color: ColorManager
-                                                                      .textColor,
-                                                                  fontSize:
-                                                                      16.sp,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            courseDetails
-                                                                        ?.grade ==
-                                                                    null
-                                                                ? Container(
-                                                                    padding: EdgeInsets
-                                                                        .all(6
-                                                                            .r),
-                                                                    decoration:
-                                                                        BoxDecoration(
-                                                                      color: ColorManager
-                                                                          .primary
-                                                                          .withValues(
-                                                                              alpha: 0.3),
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.r),
-                                                                    ),
-                                                                    child: Text(
-                                                                      courseDetails
-                                                                              ?.grade ??
-                                                                          '',
-                                                                      style: context
-                                                                          .textTheme
-                                                                          .bodyMedium!
-                                                                          .copyWith(
-                                                                        color: ColorManager
-                                                                            .primary,
-                                                                        fontSize:
-                                                                            14.sp,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
-                                                                    ),
-                                                                  )
-                                                                : const SizedBox
-                                                                    .shrink(),
-                                                          ],
-                                                        ),
-                                                        SizedBox(
-                                                          height: 5.h,
-                                                        ),
-                                                        Text(
-                                                          courseDetails?.name ??
-                                                              '',
-                                                          style: context
-                                                              .textTheme
-                                                              .bodyMedium!
-                                                              .copyWith(
-                                                            color: Colors.black,
-                                                            fontSize: 20.sp,
-                                                            fontWeight:
-                                                                FontWeight.bold,
+                                                  return Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .stretch,
+                                                    children: [
+                                                      DefaultButtonWidget(
+                                                        text: buttonText,
+                                                        color: ColorManager
+                                                            .primary,
+                                                        textColor:
+                                                            ColorManager.white,
+                                                        onPressed: (isDownloading ||
+                                                                isCompleted)
+                                                            ? null
+                                                            : _downloadCurrentVideo,
+                                                      ),
+                                                      if (isDownloading &&
+                                                          progress != null)
+                                                        Padding(
+                                                          padding:
+                                                              EdgeInsets.only(
+                                                            top: 8.h,
+                                                          ),
+                                                          child:
+                                                              LinearProgressIndicator(
+                                                            value: progress
+                                                                .progress,
+                                                            backgroundColor: Colors
+                                                                .grey
+                                                                .shade300,
+                                                            color: ColorManager
+                                                                .primary,
                                                           ),
                                                         ),
-                                                        SizedBox(
-                                                          height: 5.h,
-                                                        ),
-                                                        Text(
+                                                    ],
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          if (!_isFullScreen)
+                                            Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 15.w),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                spacing: 3.h,
+                                                children: [
+                                                  Gap(10.h),
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
                                                           courseDetails
-                                                                  ?.description ??
+                                                                  ?.teacher ??
                                                               '',
                                                           style: context
                                                               .textTheme
                                                               .bodyMedium!
                                                               .copyWith(
                                                             color: ColorManager
-                                                                .primary,
-                                                            fontSize: 14.sp,
+                                                                .textColor,
+                                                            fontSize: 16.sp,
                                                             fontWeight:
                                                                 FontWeight.bold,
                                                           ),
-                                                          maxLines: 2,
                                                         ),
-                                                        SizedBox(
-                                                          height: 15.h,
-                                                        ),
-                                                        RowForBookNumber(
-                                                            filesCount:
+                                                      ),
+                                                      courseDetails?.grade ==
+                                                              null
+                                                          ? Container(
+                                                              padding:
+                                                                  EdgeInsets.all(
+                                                                      6.r),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: ColorManager
+                                                                    .primary
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.3),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            8.r),
+                                                              ),
+                                                              child: Text(
                                                                 courseDetails
-                                                                        ?.filesCount ??
-                                                                    0,
-                                                            lessonsCount:
-                                                                courseDetails
-                                                                        ?.lessonsCount ??
-                                                                    0,
-                                                            voiceCount:
-                                                                courseDetails
-                                                                        ?.voiceCount ??
-                                                                    0),
-                                                        SizedBox(
-                                                          height: 15.h,
-                                                        ),
-                                                        SelectType(
-                                                          addressCallback:
-                                                              (selectedValue) {
-                                                            setState(() {
-                                                              selectedType =
-                                                                  selectedValue;
-                                                            });
-                                                          },
-                                                        ),
-                                                        Padding(
-                                                          padding: EdgeInsets
-                                                              .symmetric(
-                                                                  horizontal:
-                                                                      10.w),
-                                                          child: selectedType ==
-                                                                  0
-                                                              ? CourseDetails(
-                                                                  text: courseDetails
-                                                                          ?.whatYouWillLearn ??
-                                                                      '',
-                                                                  id: courseDetails
-                                                                          ?.id ??
-                                                                      0,
-                                                                  course:
-                                                                      courseDetails,
-                                                                  onOpenPdf:
-                                                                      _openPdfInScreen,
-                                                                )
-                                                              : selectedType ==
-                                                                      1
-                                                                  ? BlocProvider(
-                                                                      create: (context) =>
-                                                                          instance<
-                                                                              ViewVideoCubit>(),
-                                                                      child: Builder(
-                                                                          builder:
-                                                                              (context) {
-                                                                        return LecturesWidget(
-                                                                          id: courseDetails?.id ??
-                                                                              0,
-                                                                          lessonId:
-                                                                              widget.videoId,
-                                                                          offlineVideoIds:
-                                                                              _offlineVideoIds,
-                                                                          onSelected:
-                                                                              (lesson) async {
-                                                                            if (lesson.videoUrl ==
-                                                                                null) {
-                                                                              return;
-                                                                            }
-                                                                            final lid =
-                                                                                lesson.id?.toString() ?? '';
-                                                                            final isOffline =
-                                                                                lid.isNotEmpty && await _offlineVideoCubit.isVideoDownloaded(lid);
-                                                                            if (!isOffline &&
-                                                                                instance<AppPreferences>().getToken().isNotEmpty) {
-                                                                              context.read<ViewVideoCubit>().viewVideo(lesson.id ?? 0);
-                                                                            }
-                                                                            await _initializeVideoPlayer(
-                                                                              courseDetails?.copyWith(
-                                                                                videoUrl: lesson.videoUrl,
-                                                                                name: lesson.name,
-                                                                              ),
-                                                                              lessonId: lesson.id,
-                                                                              lessonTitle: lesson.name,
-                                                                            );
-                                                                            if (!mounted) {
-                                                                              return;
-                                                                            }
-                                                                            _showVideoPlayer =
-                                                                                true;
-                                                                            setState(() {});
-                                                                          },
-                                                                        );
-                                                                      }),
-                                                                    )
-                                                                  : VoiceNote(
-                                                                      id: courseDetails
-                                                                              ?.id ??
-                                                                          0),
-                                                        ),
-                                                        Gap(5.h),
-                                                        CustomTitle(
-                                                            title: AppStrings
-                                                                .teacher
-                                                                .tr()),
-                                                        TeacherView(
-                                                          onTap: () {
-                                                            _videoController
-                                                                ?.pause();
-                                                          },
-                                                        ),
-                                                        Gap(30.h),
-                                                      ],
+                                                                        ?.grade ??
+                                                                    '',
+                                                                style: context
+                                                                    .textTheme
+                                                                    .bodyMedium!
+                                                                    .copyWith(
+                                                                  color: ColorManager
+                                                                      .primary,
+                                                                  fontSize:
+                                                                      14.sp,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : const SizedBox
+                                                              .shrink(),
+                                                    ],
+                                                  ),
+                                                  SizedBox(
+                                                    height: 5.h,
+                                                  ),
+                                                  Text(
+                                                    courseDetails?.name ?? '',
+                                                    style: context
+                                                        .textTheme.bodyMedium!
+                                                        .copyWith(
+                                                      color: Colors.black,
+                                                      fontSize: 20.sp,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
-                                              ],
+                                                  SizedBox(
+                                                    height: 5.h,
+                                                  ),
+                                                  Text(
+                                                    courseDetails
+                                                            ?.description ??
+                                                        '',
+                                                    style: context
+                                                        .textTheme.bodyMedium!
+                                                        .copyWith(
+                                                      color:
+                                                          ColorManager.primary,
+                                                      fontSize: 14.sp,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                    maxLines: 2,
+                                                  ),
+                                                  SizedBox(
+                                                    height: 15.h,
+                                                  ),
+                                                  RowForBookNumber(
+                                                      filesCount: courseDetails
+                                                              ?.filesCount ??
+                                                          0,
+                                                      lessonsCount:
+                                                          courseDetails
+                                                                  ?.lessonsCount ??
+                                                              0,
+                                                      voiceCount: courseDetails
+                                                              ?.voiceCount ??
+                                                          0),
+                                                  SizedBox(
+                                                    height: 15.h,
+                                                  ),
+                                                  SelectType(
+                                                    addressCallback:
+                                                        (selectedValue) {
+                                                      setState(() {
+                                                        selectedType =
+                                                            selectedValue;
+                                                      });
+                                                    },
+                                                  ),
+                                                  Padding(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 10.w),
+                                                    child: selectedType == 0
+                                                        ? CourseDetails(
+                                                            text: courseDetails
+                                                                    ?.whatYouWillLearn ??
+                                                                '',
+                                                            id: courseDetails
+                                                                    ?.id ??
+                                                                0,
+                                                            course:
+                                                                courseDetails,
+                                                            onOpenPdf:
+                                                                _openPdfInScreen,
+                                                          )
+                                                        : selectedType == 1
+                                                            ? BlocProvider(
+                                                                create: (context) =>
+                                                                    instance<
+                                                                        ViewVideoCubit>(),
+                                                                child: Builder(
+                                                                    builder:
+                                                                        (context) {
+                                                                  return LecturesWidget(
+                                                                    id: courseDetails?.id ??
+                                                                        0,
+                                                                    lessonId: widget
+                                                                        .videoId,
+                                                                    onSelected:
+                                                                        (lesson) {
+                                                                      if (lesson.videoUrl !=
+                                                                          null) {
+                                                                        if (instance<AppPreferences>()
+                                                                            .getToken()
+                                                                            .isNotEmpty) {
+                                                                          context
+                                                                              .read<ViewVideoCubit>()
+                                                                              .viewVideo(lesson.id ?? 0);
+                                                                        }
+                                                                        _initializeVideoPlayer(courseDetails?.copyWith(
+                                                                            videoUrl:
+                                                                                lesson.videoUrl));
+                                                                        _showVideoPlayer =
+                                                                            true;
+                                                                        setState(
+                                                                            () {});
+                                                                      }
+                                                                    },
+                                                                  );
+                                                                }),
+                                                              )
+                                                            : VoiceNote(
+                                                                id: courseDetails
+                                                                        ?.id ??
+                                                                    0),
+                                                  ),
+                                                  Gap(5.h),
+                                                  CustomTitle(
+                                                      title: AppStrings.teacher
+                                                          .tr()),
+                                                  TeacherView(
+                                                    onTap: () {
+                                                      _videoController?.pause();
+                                                    },
+                                                  ),
+                                                  Gap(30.h),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                    PositionedDirectional(
-                      child: IconButton(
-                        onPressed: () async {
-                          await Future.wait([
-                            SystemChrome.setPreferredOrientations([
-                              DeviceOrientation.portraitUp,
-                              DeviceOrientation.portraitDown,
-                            ]),
-                            if (!(defaultTargetPlatform ==
-                                TargetPlatform.iOS)) ...[
-                              SystemChrome.setPreferredOrientations(
-                                  DeviceOrientation.values),
-                              SystemChrome.setEnabledSystemUIMode(
-                                SystemUiMode.manual,
-                                overlays: SystemUiOverlay.values,
-                              ),
-                            ]
-                          ]);
-                          Navigator.pop(context);
-                        },
-                        style: const ButtonStyle(
-                          backgroundColor:
-                              WidgetStatePropertyAll(ColorManager.primary),
+                                        ],
+                                      ),
+                                    ),
+                            ),
+                          ],
                         ),
-                        icon: const Icon(
-                          Icons.arrow_back,
-                          color: ColorManager.white,
-                        ),
+                  PositionedDirectional(
+                    child: IconButton(
+                      onPressed: () async {
+                        await Future.wait([
+                          SystemChrome.setPreferredOrientations([
+                            DeviceOrientation.portraitUp,
+                            DeviceOrientation.portraitDown,
+                          ]),
+                          if (!(defaultTargetPlatform ==
+                              TargetPlatform.iOS)) ...[
+                            SystemChrome.setPreferredOrientations(
+                                DeviceOrientation.values),
+                            SystemChrome.setEnabledSystemUIMode(
+                              SystemUiMode.manual,
+                              overlays: SystemUiOverlay.values,
+                            ),
+                          ]
+                        ]);
+                        Navigator.pop(context);
+                      },
+                      style: const ButtonStyle(
+                        backgroundColor:
+                            WidgetStatePropertyAll(ColorManager.primary),
+                      ),
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: ColorManager.white,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -795,13 +603,7 @@ class _DetailsState extends State<Details> {
                         ),
                       ),
                     ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: VideoPlaybackSpeedControls(
-                        controller: _videoController!,
-                      ),
-                    ),
+                    // Controls overlay
                     Positioned.fill(
                       child: _buildVideoControls(),
                     ),
@@ -1012,11 +814,7 @@ class _DetailsState extends State<Details> {
   }
 
   void _downloadCurrentVideo() {
-    if (_currentVideoUrl == null ||
-        _currentVideoUrl!.isEmpty ||
-        _currentVideoId == null) {
-      return;
-    }
+    if (_currentVideoUrl == null || _currentVideoId == null) return;
     if (_hasRequestedDownload) return;
 
     final video = DownloadableVideo(

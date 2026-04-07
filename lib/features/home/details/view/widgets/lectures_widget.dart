@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:elmotamizon/app/app_functions.dart';
 import 'package:elmotamizon/app/imports.dart';
@@ -22,17 +20,11 @@ import 'package:gap/gap.dart';
 class LecturesWidget extends StatefulWidget {
   const LecturesWidget({
     super.key,
-    required this.id,
-    this.onSelected,
-    this.lessonId,
-    this.offlineVideoIds = const {},
+    required this.id, this.onSelected, this.lessonId,
   });
   final int id;
   final int? lessonId;
-  final FutureOr<void> Function(LessonModel lesson)? onSelected;
-
-  /// Video ids (usually lesson ids as strings) present in offline storage.
-  final Set<String> offlineVideoIds;
+  final Function(LessonModel lesson)? onSelected;
 
   @override
   State<LecturesWidget> createState() => _LecturesWidgetState();
@@ -50,8 +42,8 @@ class _LecturesWidgetState extends State<LecturesWidget> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => instance<LessonsContentCubit>()
-        ..loadFirstLessonsContentPage(widget.id),
+      create: (context) =>
+          instance<LessonsContentCubit>()..loadFirstLessonsContentPage(widget.id),
       child: BlocBuilder<LessonsContentCubit, BaseState<LessonModel>>(
         builder: (context, state) {
           if (state.status == Status.failure) {
@@ -59,16 +51,10 @@ class _LecturesWidgetState extends State<LecturesWidget> {
           }
           if (state.status == Status.loading) {
             return Column(
-              children: List.generate(
-                3,
-                (index) => Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10.h),
-                  child: ShimmerContainerWidget(
-                    height: 20.h,
-                    width: double.infinity,
-                  ),
-                ),
-              ),
+              children: List.generate(3, (index) => Padding(
+                padding: EdgeInsets.symmetric(vertical: 10.h),
+                child: ShimmerContainerWidget(height: 20.h,width: double.infinity,),
+              ),),
             );
           }
           final lessonsList = state.items;
@@ -82,75 +68,50 @@ class _LecturesWidgetState extends State<LecturesWidget> {
                 spacing: 15.h,
                 children: lessonsList.asMap().entries.map((entry) {
                   final index = entry.key;
-                  final lesson = lessonsList[index];
-                  final lessonIdStr = lesson.id?.toString() ?? '';
-                  final isOfflineReady = lessonIdStr.isNotEmpty &&
-                      widget.offlineVideoIds.contains(lessonIdStr);
-                  final canStream =
-                      lesson.isFree == 1 || lesson.isSubscribed == 1;
                   return GestureDetector(
                     onTap: () {
-                      if (widget.onSelected != null &&
-                          (_selectedId != lesson.id)) {
-                        if (canStream || isOfflineReady) {
-                          widget.onSelected!(lesson);
-                          _selectedId = lesson.id ?? 0;
+                      if(widget.onSelected != null && (_selectedId != lessonsList[index].id)){
+                        if(lessonsList[index].isFree==1 || lessonsList[index].isSubscribed==1) {
+                          widget.onSelected!(lessonsList[index]);
+                          _selectedId = lessonsList[index].id ?? 0;
                           setState(() {});
-                        } else {
-                          AppFunctions.showsToast(
-                              AppStrings.subscribeFirst.tr(),
-                              ColorManager.red,
-                              context);
+                        }
+                        else{
+                          AppFunctions.showsToast(AppStrings.subscribeFirst.tr(), ColorManager.red, context);
                         }
                       }
                     },
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: BookText(
-                            havePerfix: true,
-                            havePostfix: !canStream && !isOfflineReady,
-                            haveTime: true,
-                            perfixIcon: Assets.assetsIconsPlayBlack,
-                            postfixIcon: Assets.assetsIconsLock,
-                            text: lesson.name ?? "",
-                            time: "",
-                            color: (_selectedId == lesson.id)
-                                ? Colors.black
-                                : null,
-                          ),
-                        ),
-                        if (isOfflineReady)
-                          Padding(
-                            padding: EdgeInsets.only(left: 6.w),
-                            child: Icon(
-                              Icons.download_done_rounded,
-                              size: 22.sp,
-                              color: ColorManager.primary,
-                            ),
-                          ),
-                      ],
+                    child: BookText(
+                      havePerfix: true,
+                      havePostfix:
+                      !(lessonsList[index].isFree == 1 || lessonsList[index].isSubscribed==1),
+                      haveTime: true,
+                      perfixIcon: Assets.assetsIconsPlayBlack,
+                      postfixIcon: Assets.assetsIconsLock,
+                      text: lessonsList[index].name ?? "",
+                      time: "",
+                      color: (_selectedId == lessonsList[index].id)
+                          ? Colors.black
+                          : null,
                     ),
                   );
                 }).toList(),
               ),
-              if (context.read<LessonsContentCubit>().hasMore) Gap(10.h),
-              if (context.read<LessonsContentCubit>().hasMore)
-                GestureDetector(
-                  onTap: () {
-                    context
-                        .read<LessonsContentCubit>()
-                        .loadMoreLessonsContentPage(widget.id);
-                  },
-                  child: Text(
-                    AppStrings.loadMore2.tr(),
-                    style: getBoldStyle(
-                      fontSize: 15.sp,
-                      color: ColorManager.primary,
-                    ),
+              if(context.read<LessonsContentCubit>().hasMore)
+                Gap(10.h),
+              if(context.read<LessonsContentCubit>().hasMore)
+              GestureDetector(
+                onTap: () {
+                  context.read<LessonsContentCubit>().loadMoreLessonsContentPage(widget.id);
+                },
+                child: Text(
+                  AppStrings.loadMore2.tr(),
+                  style: getBoldStyle(
+                    fontSize: 15.sp,
+                    color: ColorManager.primary,
                   ),
                 ),
+              ),
             ],
           );
         },

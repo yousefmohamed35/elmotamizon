@@ -43,8 +43,7 @@ class ShowAll extends StatelessWidget {
           isFreeLesson: type == CoursesType.isFreeLesson,
           isSubscribedBooks: type == CoursesType.subscribedBooks,
           isSearch: type == CoursesType.search,
-          status:
-              searchController.text.isNotEmpty ? searchController.text : null,
+          status: searchController.text.isNotEmpty ? searchController.text : null,
         ),
       child: Scaffold(
         appBar: type == CoursesType.isBooks ||
@@ -93,16 +92,13 @@ class ShowAll extends StatelessWidget {
             }
             final data = state.items;
             return CustomVetricalList(
-              isDetails: !(type == CoursesType.isBooks ||
-                  type == CoursesType.isFavoriteBook ||
-                  type == CoursesType.subscribedBooks),
+              isDetails: !(type == CoursesType.isBooks || type == CoursesType.isFavoriteBook || type == CoursesType.subscribedBooks),
               list: data,
               child: (index) {
                 return type == CoursesType.isBooks ||
                         type == CoursesType.isFavoriteBook ||
                         type == CoursesType.subscribedBooks ||
-                        (type == CoursesType.search &&
-                            data[index].type == "book")
+                        (type == CoursesType.search && data[index].type == "book")
                     ? PopularBooksItem(
                         popularBooks: data[index],
                         width: context.screenWidth,
@@ -116,7 +112,6 @@ class ShowAll extends StatelessWidget {
                                   id: "${state.items[index].courseId}",
                                   videoId: state.items[index].id,
                                   videoUrl: state.items[index].videoUrl,
-                                  videoTitle: state.items[index].name,
                                 ),
                               );
                             },

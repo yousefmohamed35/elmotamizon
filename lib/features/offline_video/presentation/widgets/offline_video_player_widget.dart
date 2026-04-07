@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
-import 'package:elmotamizon/common/widgets/video_playback_speed/playback_speed.dart';
 import 'package:elmotamizon/features/offline_video/domain/entities/encrypted_video_metadata.dart';
 import 'package:elmotamizon/features/offline_video/presentation/cubit/offline_video_cubit.dart';
 
@@ -110,17 +109,11 @@ class _OfflineVideoPlayerWidgetState extends State<OfflineVideoPlayerWidget> {
       },
       child: Stack(
         alignment: Alignment.center,
-        clipBehavior: Clip.none,
         children: [
           Center(
             child: AspectRatio(
               aspectRatio: _controller!.value.aspectRatio,
               child: VideoPlayer(_controller!),
-            ),
-          ),
-          Positioned.fill(
-            child: VideoPlaybackSpeedControls(
-              controller: _controller!,
             ),
           ),
           if (_controlsVisible) _buildVideoControls(),
